@@ -1,5 +1,6 @@
 const Stock = require('../Schemas/stockSchema');
 const User = require('../Schemas/userSchema');
+const UserHistory = require('../Schemas/userHistorySchema');
 const { validateId } = require('./authController');
 const { CheckBalance } = require('./authController');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
@@ -42,41 +43,78 @@ const buyStock = async (req, res) => {
     const { symbol, price, quantity } = req.body;
     const totalPrice = quantity * price;
     const balance = await CheckBalance(id);
+
     if (balance < totalPrice) {
         return res.status(400).json({ message: "Insufficient Balance" });
     }
 
-    // Check if stock already exists for the user
-    else {
-        const existingStock = await Stock.findOne({ id, name: symbol });
-        const Updatedbalance = balance - totalPrice;
-        console.log(Updatedbalance)
-        await User.updateOne({ id }, { $set: {balance : Updatedbalance } });
-        if (existingStock) {
-            // Update quantity and total price
-            existingStock.quantity += quantity;
-            existingStock.totalPrice += totalPrice;
+    const existingStock = await Stock.findOne({ id, name: symbol });
+    const Updatedbalance = balance - totalPrice;
+    await User.updateOne({ id }, { $set: { balance: Updatedbalance } });
 
-            await existingStock.save();
-            res.json({ message: "Stock updated successfully!" });
-        } else {
-            // Insert new stock
-            const newStock = new Stock({
-                id,
-                name: symbol,
-                price,
-                quantity,
-                totalPrice,
-            });
-
-            await newStock.save();
-            res.json({ message: "Stock bought and saved successfully!" });
-        }
+    if (existingStock) {
+        existingStock.quantity += quantity;
+        existingStock.totalPrice += totalPrice;
+        await existingStock.save();
+    } else {
+        const newStock = new Stock({ id, name: symbol, price, quantity, totalPrice });
+        await newStock.save();
     }
+
+    const historyEntry = new UserHistory({
+        userId: id,
+        symbol,
+        action: 'buy',
+        price,
+        quantity,
+        total: totalPrice
+    });
+    await historyEntry.save();
+
+    res.json({ message: "Stock bought successfully!" });
 };
 
 const deleteStock = async (req, res) => {
-    res.json({ message: "Delete Success!!" }); // Implement logic later
+    const id = Number(req.params.id);
+    const symbol = req.params.symbol.toUpperCase();
+
+    if (!(await validateId(id))) {
+        return res.status(404).json({ message: "Invalid User ID" });
+    }
+
+    try {
+        const stock = await Stock.findOne({ id, name: symbol });
+
+        if (!stock) {
+            return res.status(404).json({ message: "Stock not found for the user" });
+        }
+
+        const refundAmount = stock.totalPrice;
+        const balance = await CheckBalance(id);
+        const updatedBalance = balance + refundAmount;
+
+        // Delete stock
+        await Stock.deleteOne({ _id: stock._id });
+
+        // Update user balance
+        await User.updateOne({ id }, { $set: { balance: updatedBalance } });
+
+        // Add to history
+        const historyEntry = new UserHistory({
+            userId: id,
+            symbol,
+            action: 'sell',
+            price: stock.price,
+            quantity: stock.quantity,
+            total: refundAmount
+        });
+        await historyEntry.save();
+
+        res.json({ message: "Stock deleted and amount refunded successfully!" });
+    } catch (err) {
+        console.error("Delete error:", err);
+        res.status(500).json({ message: "Failed to delete stock" });
+    }
 };
 
 module.exports = { getUserStocks, getStockPrice, buyStock, deleteStock };

@@ -77,9 +77,14 @@ const buyStock = async (req, res) => {
 const deleteStock = async (req, res) => {
     const id = Number(req.params.id);
     const symbol = req.params.symbol.toUpperCase();
+    const quantityToSell = req.body.quantity; // Get quantity from frontend
 
     if (!(await validateId(id))) {
         return res.status(404).json({ message: "Invalid User ID" });
+    }
+
+    if (!quantityToSell || quantityToSell <= 0) {
+        return res.status(400).json({ message: "Invalid quantity to sell" });
     }
 
     try {
@@ -89,32 +94,44 @@ const deleteStock = async (req, res) => {
             return res.status(404).json({ message: "Stock not found for the user" });
         }
 
-        const refundAmount = stock.totalPrice;
+        if (quantityToSell > stock.quantity) {
+            return res.status(400).json({ message: "You can't sell more than you own" });
+        }
+
+        const pricePerStock = stock.price;
+        const totalRefund = pricePerStock * quantityToSell;
+
+        // Update balance
         const balance = await CheckBalance(id);
-        const updatedBalance = balance + refundAmount;
-
-        // Delete stock
-        await Stock.deleteOne({ _id: stock._id });
-
-        // Update user balance
+        const updatedBalance = balance + totalRefund;
         await User.updateOne({ id }, { $set: { balance: updatedBalance } });
+
+        // Update stock quantity or delete if fully sold
+        if (quantityToSell === stock.quantity) {
+            await Stock.deleteOne({ _id: stock._id });
+        } else {
+            stock.quantity -= quantityToSell;
+            stock.totalPrice = stock.quantity * stock.price;
+            await stock.save();
+        }
 
         // Add to history
         const historyEntry = new UserHistory({
             userId: id,
             symbol,
             action: 'sell',
-            price: stock.price,
-            quantity: stock.quantity,
-            total: refundAmount
+            price: pricePerStock,
+            quantity: quantityToSell,
+            total: totalRefund
         });
         await historyEntry.save();
 
-        res.json({ message: "Stock deleted and amount refunded successfully!" });
+        res.json({ message: `${quantityToSell} ${symbol} shares sold successfully.` });
     } catch (err) {
         console.error("Delete error:", err);
-        res.status(500).json({ message: "Failed to delete stock" });
+        res.status(500).json({ message: "Failed to process stock sell request" });
     }
 };
+
 
 module.exports = { getUserStocks, getStockPrice, buyStock, deleteStock };

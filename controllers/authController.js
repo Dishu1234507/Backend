@@ -181,6 +181,31 @@ const getUser = async (req, res) => {
         res.status(500).json({ message: "Something went wrong" });
     }
 };
+const addBalance = async (req, res) => {
+    try {
+        const token = req.headers.authorization;
+        if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+        const decoded = jwt.verify(token, process.env.ACCESS_SECRET_KEY);
+        const userId = decoded.id;
+
+        const amount = parseFloat(req.body.amount);
+        if (isNaN(amount) || amount <= 0) {
+            return res.status(400).json({ message: "Invalid amount" });
+        }
+
+        const user = await User.findOne({ id: userId });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        user.balance += amount;
+        await user.save();
+
+        res.json({ message: "Balance added successfully", balance: user.balance });
+    } catch (err) {
+        console.error("Add balance error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
 
 // ------------------------
 // 📦 Export All
@@ -194,5 +219,6 @@ module.exports = {
     validateId,
     CheckBalance,
     userProfile,
-    getUser
+    getUser,
+    addBalance
 };

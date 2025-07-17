@@ -41,7 +41,7 @@ const getStockPrice = async (req, res) => {
         if (data.status === "error") {
             return res.status(400).json({ error: data.message });
         }
-
+        console.log(data.price)
         res.json({ symbol, price: data.price });
     } catch (err) {
         console.error("Fetch error:", err);

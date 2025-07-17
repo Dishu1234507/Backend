@@ -169,6 +169,24 @@ const deleteStock = async (req, res) => {
     }
 };
 
+const userHistory = async (req, res) => {
+    const id = Number(req.params.id);
+
+    // ✅ Validate user ID
+    if (!(await validateId(id))) {
+        return res.status(404).json({ message: "Invalid User ID" });
+    }
+
+    try {
+        // ✅ Fetch user transaction history
+        const history = await userhistories.find({ userId: id });
+        res.json(history);
+    } catch (err) {
+        console.error("Error fetching user history:", err);
+        res.status(500).json({ message: "Failed to fetch user history" });
+    }
+};
+
 
 // ------------------------
 // 📦 Export Controller

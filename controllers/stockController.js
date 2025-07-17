@@ -2,6 +2,7 @@ const Stock = require('../Schemas/stockSchema');
 const User = require('../Schemas/userSchema');
 const UserHistory = require('../Schemas/userHistorySchema');
 const { validateId, CheckBalance } = require('./authController');
+const userHistorySchema = require('../Schemas/userHistorySchema');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
@@ -158,8 +159,10 @@ const deleteStock = async (req, res) => {
             price: currentPrice,
             profit: totalProfit,
             quantity: quantityToSell,
-            total: totalRefund
+            total: totalRefund,
+            buyPrice: avgBuyPrice // 👈 Add this line
         });
+
         await historyEntry.save();
 
         res.json({ message: `${quantityToSell} ${symbol} shares sold successfully.`, profit: totalProfit.toFixed(2) });
@@ -170,7 +173,7 @@ const deleteStock = async (req, res) => {
 };
 
 const userHistory = async (req, res) => {
-    const id = Number(req.params.id);
+    const id = req.params.id;
 
     // ✅ Validate user ID
     if (!(await validateId(id))) {
@@ -179,7 +182,7 @@ const userHistory = async (req, res) => {
 
     try {
         // ✅ Fetch user transaction history
-        const history = await userhistories.find({ userId: id });
+        const history = await userHistorySchema.find({ userId: id });
         res.json(history);
     } catch (err) {
         console.error("Error fetching user history:", err);

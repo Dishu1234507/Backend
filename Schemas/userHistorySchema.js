@@ -4,6 +4,7 @@ const userHistorySchema = new mongoose.Schema({
   symbol: String,
   action: String, // 'buy' or 'sell'
   price: Number,
+  profit:Number,
   quantity: Number,
   total: Number,
   timestamp: { type: Date, default: Date.now }

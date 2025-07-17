@@ -196,5 +196,6 @@ module.exports = {
     getUserStocks,
     getStockPrice,
     buyStock,
-    deleteStock
+    deleteStock,
+    userHistory
 };
